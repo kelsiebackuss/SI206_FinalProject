@@ -1,38 +1,93 @@
-import requests
-import sqlite3
-import datetime
+import requests, sqlite3
+from datetime import datetime, timedelta
+from config import OPENUV_API_KEY
 
-API_KEY = "KKfuINNnA0noEVntHneY3uAkGQ8J96aC"  # Your actual API key
+DB_NAME = "mental_health_weather.db"
 
-def get_top_cities(number=50):
-    """Fetches the top cities from AccuWeather API."""
-    url = f"http://dataservice.accuweather.com/locations/v1/topcities/{number}"  # Use the number parameter here
+cities = {
+    "Berlin": (52.52, 13.405),
+    "Paris": (48.8566, 2.3522),
+    "New York": (40.7128, -74.0060),
+    "Los Angeles": (34.0522, -118.2437)
+}
+
+def get_uv_data(city, lat, lng):
+    url = "https://api.openuv.io/api/v1/uv"
+    headers = {"x-access-token": OPENUV_API_KEY}
     params = {
-        'apikey': API_KEY,  # The API key is used here to authenticate your request
-        'language': 'en-us',
-        'details': 'false'
+        "lat": lat,
+        "lng": lng
     }
 
-    try:
-        response = requests.get(url, params=params)  # Sends the request
+    response = requests.get(url, headers=headers, params=params)
+    if response.status_code != 200:
+        print(f" Error fetching UV data for {city}")
+        return None
 
-        # Check if the request was successful
-        if response.status_code == 200:
-            return response.json()  # Returns the data as JSON
-        else:
-            print(f"Error: Unable to fetch top cities data. Status code {response.status_code}")
-            return []
-    except Exception as e:
-        print(f"An error occurred: {e}")
-        return []
+    data = response.json()
+    return {
+        "city": city,
+        "date": data["result"]["uv_time"].split("T")[0],
+        "uv": data["result"]["uv"],
+        "uv_max": data["result"]["uv_max"],
+        "ozone": data["result"].get("ozone", None)
+    }
 
-def main():
-    top_cities = get_top_cities(50)  # Fetch top 50 cities
-    if top_cities:
-        print("Top Cities List:")
-        for city in top_cities:
-            # Printing city names and country names
-            print(f"{city['LocalizedName']}, {city['Country']['EnglishName']}")
+def store_uv_data(city, date, uv, uv_max, ozone):
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS UVData (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            city TEXT,
+            date TEXT,
+            uv REAL,
+            uv_max REAL,
+            ozone REAL,
+            UNIQUE(city, date)
+        )
+    ''')
+    cur.execute('''
+        INSERT OR IGNORE INTO UVData (city, date, uv, uv_max, ozone)
+        VALUES (?, ?, ?, ?, ?)
+    ''', (city, date, uv, uv_max, ozone))
+    conn.commit()
+    conn.close()
+
+def run_uv_collection():
+    count = 0
+    max_rows = 100  # goal for the rubric
+    total_days_back = 40  # check up to 40 days to get enough unique entries
+
+    for i in range(total_days_back):
+        if count >= max_rows:
+            print(" 100 rows collected.")
+            return
+        date = (datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d')
+        for city, (lat, lng) in cities.items():
+            if count >= max_rows:
+                break
+            url = f"https://api.openuv.io/api/v1/uv?lat={lat}&lng={lng}&dt={date}T12:00:00Z"
+            headers = {"x-access-token": OPENUV_API_KEY}
+            response = requests.get(url, headers=headers)
+            if response.status_code != 200:
+                print(f" Skipping {city} on {date} — Status: {response.status_code}")
+                continue
+            try:
+                data = response.json()["result"]
+                store_uv_data(
+                    city,
+                    date,
+                    data["uv"],
+                    data["uv_max"],
+                    data.get("ozone", None)
+                )
+                print(f"Added {city} on {date} — UV: {data['uv']}")
+                count += 1
+            except Exception as e:
+                print(f" Error parsing {city} on {date}: {e}")
+
+    print(f" Finished early — only {count} rows inserted (try increasing total_days_back)")
 
 if __name__ == "__main__":
-    main()
+    run_uv_collection()

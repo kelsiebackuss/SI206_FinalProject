@@ -1,5 +1,7 @@
 import requests, sqlite3
 from datetime import datetime
+import os
+print(" Writing to DB:", os.path.abspath("mental_health_weather.db"))
 
 # 1. Define cities and keywords
 cities = ["New York", "Berlin", "Paris", "Los Angeles"]
@@ -72,4 +74,3 @@ def run_reddit_collection():
 
 if __name__ == "__main__":
     run_reddit_collection()
-

@@ -1,1 +1,7 @@
-ACCUWEATHER_API_KEY = "BAhJXJAhFuAgbETubtD7SGnD19iingp2"
+# OPENUV API Key
+OPENUV_API_KEY = "openuv-fgk4rm9t1y21o-io"
+
+# Reddit API (PRAW)
+REDDIT_CLIENT_ID = "TE1eOpDekr4DvQt1WQwNQ"
+REDDIT_SECRET = "7TAn1jnlOpC5OVfLGRLr2Ufy1h49aA"
+REDDIT_USER_AGENT = "SI 206 Final Project by u/Dramatic_Lab_4254"
